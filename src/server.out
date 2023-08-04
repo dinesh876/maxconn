@@ -1,0 +1,4 @@
+[2m2023-08-01T05:12:34.331053Z[0m [32m INFO[0m [2mmaxconn_server[0m[2m:[0m starting the server
+[2m2023-08-01T05:12:34.331323Z[0m [32m INFO[0m [2mmaxconn::server[0m[2m:[0m Configuring the maximum number of connections allowed... [3mmax_connection[0m[2m=[0m5000
+[2m2023-08-01T05:12:34.331475Z[0m [32m INFO[0m [2mmaxconn::server[0m[2m:[0m Listening on 0.0.0.0:8081
+[2m2023-08-01T05:12:34.331527Z[0m [32m INFO[0m [2mmaxconn::server[0m[2m:[0m Accepting inbound connection...

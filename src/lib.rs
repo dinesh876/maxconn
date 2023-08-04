@@ -10,6 +10,9 @@ use shutdown::Shutdown;
 pub mod clients;
 pub use clients::Client;
 
-mod metrics;
-use metrics::Metrics;
+pub mod metrics;
+use metrics::TcpClientConnectionMetrics;
 use metrics::ConnectionStatus;
+
+pub mod groupofconnections;
+use groupofconnections::GroupOfConnections;

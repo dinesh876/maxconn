@@ -4,7 +4,7 @@ use tokio::sync::{mpsc,broadcast,Semaphore};
 use tokio::time::{Duration,self};
 use crate::{Shutdown,Connection};
 use std::future::Future;
-use tracing::{debug,info};
+use tracing::{debug,info,error};
 
 #[derive(Debug)]
 struct Listener {
@@ -27,10 +27,10 @@ pub async fn run(listener: TcpListener,max_connection:usize,shutdown:impl Future
     let (shutdown_complete_tx,mut shutdown_complete_rx) = mpsc::channel(1);
 
     //Initialize the listener
-
+    info!(%max_connection,"Configuring the maximum number of connections allowed...");
     let mut server = Listener{
         listener,
-        limit_connections: Arc::new(Semaphore::new(max_connection)),
+        limit_connections: Arc::new(Semaphore::new(5000)),
         notify_shutdown,
         shutdown_complete_tx,
     };
@@ -59,6 +59,7 @@ impl Listener {
     pub async fn run(&mut self) -> Result<(),Box<dyn std::error::Error>> {
         info!("Listening on {:?}", self.listener.local_addr().unwrap());
         info!("Accepting inbound connection...");
+        let mut i = 0;
         loop {
             let permit = self
                 .limit_connections
@@ -73,6 +74,8 @@ impl Listener {
                 shutdown: Shutdown::new(self.notify_shutdown.subscribe()),
                 _shutdown_complete: self.shutdown_complete_tx.clone()
             };
+            i +=1;
+            println!("connection Count: {}",i);
             tokio::spawn(async move{
                 if let Err(e) = handler.run().await {
                     debug!("peer: {:?} - connection closed with error {:?}:",handler.connection.peer_address().unwrap(),e);
@@ -91,6 +94,7 @@ impl Listener {
             match self.listener.accept().await {
                 Ok((socket,_)) => return Ok(socket),
                 Err(err) =>{
+                    error!(%err,"connection error");
                     if backoff > 64 {
                         return Err(err.into());
                     }
@@ -106,7 +110,7 @@ impl Listener {
 impl Handler {
     async fn run(&mut self) -> Result<(), Box<dyn std::error::Error>>{
             let peer_address =  self.connection.peer_address()?;
-            debug!(%peer_address,"Recevied a  connection");
+            //debug!(%peer_address,"Recevied a  connection");
             self.connection.set_keepalive()?;
             while !self.shutdown.is_shutdown(){
                 let _ = tokio::select!{

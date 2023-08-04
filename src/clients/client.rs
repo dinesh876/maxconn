@@ -8,11 +8,18 @@ use std::thread;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
-use crate::{Metrics,ConnectionStatus};
+use tracing::info;
+//use tokio::sync::mpsc;
+use crate::{TcpClientConnectionMetrics,ConnectionStatus};
 
 pub struct Client{
     remote_address:String,
     sh: Shutdown,
+}
+
+fn report_tcp_client_connection_metrics(connection_details: TcpClientConnectionMetrics) {
+   // tx.send(connection_details);
+    info!(%connection_details,"Tcp Client Connection metrics");
 }
 
 pub async fn run(address: String,shutdown: impl Future + Send + 'static,max_connections: u64,delay: u64){
@@ -46,7 +53,7 @@ pub async fn run(address: String,shutdown: impl Future + Send + 'static,max_conn
             };
         });
         println!("Established connection:{:?}",runner);
-        thread::sleep(Duration::from_secs(delay));
+        thread::sleep(Duration::from_millis(delay));
     }
     println!("Shutting down the all the clients");
     drop(notify_shutdown)
@@ -55,9 +62,15 @@ pub async fn run(address: String,shutdown: impl Future + Send + 'static,max_conn
 
 impl Client{
     pub async fn connect(&mut self,id:u64) -> Result<(),Box<dyn std::error::Error>>{
+            //setting up the connection time out
             const CONNECTION_TIME:u64 = 100;
-            let mut connection_details = Metrics::new(id,ConnectionStatus::ConnectionDialing);
+
+            //Initialize the connection metrics
+            let mut connection_metrics = TcpClientConnectionMetrics::new(id,ConnectionStatus::ConnectionDialing);
+            report_tcp_client_connection_metrics(connection_metrics);
+
             let start = Instant::now();
+
             let socket = match timeout (
                 Duration::from_secs(CONNECTION_TIME),
                 TcpStream::connect(&self.remote_address)
@@ -65,14 +78,16 @@ impl Client{
                 Ok(v) => match v  {
                     Ok(s) => {
                         let time_taken = start.elapsed().as_micros();
-                        connection_details.metrics.tcp_established_duration = time_taken as u64;
-                        connection_details.status =  ConnectionStatus::ConnectionEstablished;
+                        connection_metrics.metrics.tcp_established_duration = time_taken as u64;
+                        connection_metrics.status =  ConnectionStatus::ConnectionEstablished;
+                        report_tcp_client_connection_metrics(connection_metrics);
                         s                    
                     },
                     Err(e) => {
                         let time_taken = start.elapsed().as_micros();
-                        connection_details.metrics.tcp_errored_duration = time_taken as u64;
-                        connection_details.status  = ConnectionStatus::ConnectionError;
+                        connection_metrics.metrics.tcp_errored_duration = time_taken as u64;
+                        connection_metrics.status  = ConnectionStatus::ConnectionError;
+                        report_tcp_client_connection_metrics(connection_metrics);
                         panic!("{}",format!("Error while connecting to server: {}",e))
                     }
                 },
@@ -86,18 +101,21 @@ impl Client{
                     res = connection.read_stream() => match res{
                         Ok(_) => {},
                         Err(_) => {
-                            connection_details.status =  ConnectionStatus::ConnectionClosed;
+                            connection_metrics.status =  ConnectionStatus::ConnectionClosed;
+                            report_tcp_client_connection_metrics(connection_metrics);
                         }
                     },
                     _ = self.sh.recv() => {
-                        println!("Shutting down the  client");
+                        connection_metrics.status = ConnectionStatus::ConnectionClosed;
+                        report_tcp_client_connection_metrics(connection_metrics);
+                        info!("Shutting down the  client");
                         return Ok(())
                     }
                 };
             }
 
             
-            println!("{:?}",connection_details);
+            println!("{:?}",connection_metrics);
             Ok(())
     }
 }

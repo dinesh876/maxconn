@@ -1,4 +1,5 @@
-#[derive(Debug)]
+use std::fmt;
+#[derive(Debug,PartialEq,Copy,Clone)]
 pub enum ConnectionStatus {
     ConnectionNotInitiated,
     ConnectionDialing,
@@ -8,22 +9,28 @@ pub enum ConnectionStatus {
 }
 
 
-#[derive(Debug)]
+#[derive(Debug,Copy,Clone)]
 pub struct ConnectionMetrics{
     pub tcp_established_duration: u64,
     pub tcp_errored_duration: u64,
 }
 
-#[derive(Debug)]
-pub struct Metrics{
+#[derive(Debug,Copy,Clone)]
+pub struct TcpClientConnectionMetrics{
     pub id: u64,
     pub status: ConnectionStatus,
     pub metrics: ConnectionMetrics
 }
 
-impl Metrics {
+impl fmt::Display for TcpClientConnectionMetrics {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "ID- {} : status - {:?}:  metrics- {:?}", self.id, self.status,self.metrics)
+    }
+}
+
+impl TcpClientConnectionMetrics {
     pub fn new(id: u64,status: ConnectionStatus) -> Self {
-        Metrics {
+        TcpClientConnectionMetrics {
             id,
             status,
             metrics: ConnectionMetrics{
@@ -32,4 +39,38 @@ impl Metrics {
             }
         }
     }
+    pub fn get_connection_status(&self) -> ConnectionStatus {
+        self.status
+    }
+    pub fn get_tcp_processing_duration(&self) -> u64{
+        if went_ok(&self){
+            return self.metrics.tcp_established_duration;
+        }
+        return self.metrics.tcp_errored_duration;
+    }
+    fn is_status_in(&self,statuses:Vec<ConnectionStatus>)->bool{
+        for status in statuses {
+            if self.get_connection_status() == status {
+                return true
+            }
+        }
+        return false
+    }
+}
+
+fn went_ok(c:&TcpClientConnectionMetrics) -> bool {
+   c.is_status_in(vec![ConnectionStatus::ConnectionEstablished,ConnectionStatus::ConnectionClosed]) 
+}
+
+fn is_ok(c:&TcpClientConnectionMetrics) -> bool {
+   c.is_status_in(vec![ConnectionStatus::ConnectionEstablished]) 
+}
+
+
+fn with_error(c:&TcpClientConnectionMetrics) -> bool {
+   c.is_status_in(vec![ConnectionStatus::ConnectionError]) 
+}
+
+fn pending_to_process(c:&TcpClientConnectionMetrics) -> bool {
+   c.is_status_in(vec![ConnectionStatus::ConnectionNotInitiated,ConnectionStatus::ConnectionDialing]) 
 }
