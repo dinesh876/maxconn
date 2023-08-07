@@ -75,7 +75,7 @@ impl Listener {
                 _shutdown_complete: self.shutdown_complete_tx.clone()
             };
             i +=1;
-            println!("connection Count: {}",i);
+            info!("Total connection created: {}",i);
             tokio::spawn(async move{
                 if let Err(e) = handler.run().await {
                     debug!("peer: {:?} - connection closed with error {:?}:",handler.connection.peer_address().unwrap(),e);

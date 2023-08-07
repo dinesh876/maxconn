@@ -58,19 +58,19 @@ impl TcpClientConnectionMetrics {
     }
 }
 
-fn went_ok(c:&TcpClientConnectionMetrics) -> bool {
+pub fn went_ok(c:&TcpClientConnectionMetrics) -> bool {
    c.is_status_in(vec![ConnectionStatus::ConnectionEstablished,ConnectionStatus::ConnectionClosed]) 
 }
 
-fn is_ok(c:&TcpClientConnectionMetrics) -> bool {
+pub fn is_ok(c:&TcpClientConnectionMetrics) -> bool {
    c.is_status_in(vec![ConnectionStatus::ConnectionEstablished]) 
 }
 
 
-fn with_error(c:&TcpClientConnectionMetrics) -> bool {
+pub fn with_error(c:&TcpClientConnectionMetrics) -> bool {
    c.is_status_in(vec![ConnectionStatus::ConnectionError]) 
 }
 
-fn pending_to_process(c:&TcpClientConnectionMetrics) -> bool {
+pub fn pending_to_process(c:&TcpClientConnectionMetrics) -> bool {
    c.is_status_in(vec![ConnectionStatus::ConnectionNotInitiated,ConnectionStatus::ConnectionDialing]) 
 }

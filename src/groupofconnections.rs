@@ -2,7 +2,7 @@ use crate::TcpClientConnectionMetrics;
 #[derive(Debug)]
 pub struct GroupOfConnections {
     pub connections: Vec<TcpClientConnectionMetrics>,
-    max_concurrent_established: u64
+    pub max_concurrent_established: u64
 }
 
 impl GroupOfConnections{

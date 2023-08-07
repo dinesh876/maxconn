@@ -11,8 +11,9 @@ pub mod clients;
 pub use clients::Client;
 
 pub mod metrics;
-use metrics::TcpClientConnectionMetrics;
-use metrics::ConnectionStatus;
+use metrics::*;
+//use metrics::TcpClientConnectionMetrics;
+//use metrics::ConnectionStatus;
 
 pub mod groupofconnections;
 use groupofconnections::GroupOfConnections;

@@ -8,9 +8,9 @@ use std::thread;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
-use tracing::info;
 use tokio::sync::mpsc;
 use crate::{TcpClientConnectionMetrics,ConnectionStatus};
+use tracing::{info,error,debug};
 
 pub struct Client{
     remote_address:String,
@@ -55,13 +55,13 @@ pub async fn run(address: String,shutdown: impl Future + Send + 'static,max_conn
         
         tokio::spawn(async move {
             if let Err(e) = client.connect(id,status_ch_clone).await {
-                println!("Error {:?}",e)
+                error!("Not able to connect to server with error {:?}",e)
             };
         });
-        println!("Established connection:{:?}",runner);
+        debug!("Established connection:{:?}",runner);
         thread::sleep(Duration::from_millis(delay));
     }
-    println!("Shutting down the all the clients");
+    debug!("Shutting down the all the clients...");
     drop(status_ch);
     drop(notify_shutdown);
     // Drop final `Sender` so the `Receiver` below can complete
@@ -74,7 +74,7 @@ pub async fn run(address: String,shutdown: impl Future + Send + 'static,max_conn
     let _ = shutdown_complete_rx.recv().await;
     // Stop the report
     stop.store(true,Relaxed);
-    println!("Shutdown completed");
+    debug!("Shutdown completed");
 }
 
 impl Client{
