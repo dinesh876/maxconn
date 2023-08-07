@@ -16,3 +16,6 @@ use metrics::ConnectionStatus;
 
 pub mod groupofconnections;
 use groupofconnections::GroupOfConnections;
+
+pub mod reporting;
+

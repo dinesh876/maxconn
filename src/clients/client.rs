@@ -9,7 +9,7 @@ use std::sync::atomic::Ordering::Relaxed;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use tracing::info;
-//use tokio::sync::mpsc;
+use tokio::sync::mpsc;
 use crate::{TcpClientConnectionMetrics,ConnectionStatus};
 
 pub struct Client{
@@ -17,17 +17,16 @@ pub struct Client{
     sh: Shutdown,
 }
 
-fn report_tcp_client_connection_metrics(connection_details: TcpClientConnectionMetrics) {
-   // tx.send(connection_details);
+async fn report_tcp_client_connection_metrics(connection_details: TcpClientConnectionMetrics,status_ch:mpsc::Sender<TcpClientConnectionMetrics>) {
+    let _ = status_ch.send(connection_details).await;
     info!(%connection_details,"Tcp Client Connection metrics");
+    drop(status_ch);
 }
 
-pub async fn run(address: String,shutdown: impl Future + Send + 'static,max_connections: u64,delay: u64){
-
-    let stop:Arc<AtomicBool> =  Arc::new(AtomicBool::new(false));
+pub async fn run(address: String,shutdown: impl Future + Send + 'static,max_connections: u64,status_ch:mpsc::Sender<TcpClientConnectionMetrics>,delay: u64,stop:Arc<AtomicBool>){
     let stop_clone =  stop.clone();
     let (notify_shutdown,_) = broadcast::channel(1);
-    let notify_shutdown_clone = notify_shutdown.clone();
+    let (shutdown_complete_tx, mut shutdown_complete_rx) = mpsc::channel::<()>(1);
     tokio::spawn(async move {
         tokio::select!{
             _ = shutdown => {
@@ -35,20 +34,27 @@ pub async fn run(address: String,shutdown: impl Future + Send + 'static,max_conn
             } 
         }
         stop_clone.store(true,Relaxed);
-        drop(notify_shutdown_clone);
     });
 
     for runner in 0..max_connections {
         let id = runner;
 
-        if stop.clone().load(Relaxed) {return ;}
+        if stop.load(Relaxed) {
+            println!("Shutdown signal recevied...");
+            drop(status_ch);
+            drop(notify_shutdown);
+            drop(shutdown_complete_tx);
+            let _ = shutdown_complete_rx.recv().await;
+            return;
+        }
         let mut client  = Client{
             remote_address: address.clone() ,
             sh: Shutdown::new(notify_shutdown.subscribe())
         };
-
+        let status_ch_clone  = status_ch.clone();
+        
         tokio::spawn(async move {
-            if let Err(e) = client.connect(id).await {
+            if let Err(e) = client.connect(id,status_ch_clone).await {
                 println!("Error {:?}",e)
             };
         });
@@ -56,21 +62,31 @@ pub async fn run(address: String,shutdown: impl Future + Send + 'static,max_conn
         thread::sleep(Duration::from_millis(delay));
     }
     println!("Shutting down the all the clients");
-    drop(notify_shutdown)
+    drop(status_ch);
+    drop(notify_shutdown);
+    // Drop final `Sender` so the `Receiver` below can complete
+    drop(shutdown_complete_tx);
 
+    // Wait for all active connections to finish processing. As the `Sender`
+    // handle held by the listener has been dropped above, the only remaining
+    // `Sender` instances are held by connection handler tasks. When those drop,
+    // the `mpsc` channel will close and `recv()` will return `None`.
+    let _ = shutdown_complete_rx.recv().await;
+    // Stop the report
+    stop.store(true,Relaxed);
+    println!("Shutdown completed");
 }
 
 impl Client{
-    pub async fn connect(&mut self,id:u64) -> Result<(),Box<dyn std::error::Error>>{
+    pub async fn connect(&mut self,id:u64,status_ch:mpsc::Sender<TcpClientConnectionMetrics>) -> Result<(),Box<dyn std::error::Error>>{
             //setting up the connection time out
             const CONNECTION_TIME:u64 = 100;
 
             //Initialize the connection metrics
             let mut connection_metrics = TcpClientConnectionMetrics::new(id,ConnectionStatus::ConnectionDialing);
-            report_tcp_client_connection_metrics(connection_metrics);
+            report_tcp_client_connection_metrics(connection_metrics,status_ch.clone()).await;
 
             let start = Instant::now();
-
             let socket = match timeout (
                 Duration::from_secs(CONNECTION_TIME),
                 TcpStream::connect(&self.remote_address)
@@ -80,14 +96,14 @@ impl Client{
                         let time_taken = start.elapsed().as_micros();
                         connection_metrics.metrics.tcp_established_duration = time_taken as u64;
                         connection_metrics.status =  ConnectionStatus::ConnectionEstablished;
-                        report_tcp_client_connection_metrics(connection_metrics);
+                        report_tcp_client_connection_metrics(connection_metrics,status_ch.clone()).await;
                         s                    
                     },
                     Err(e) => {
                         let time_taken = start.elapsed().as_micros();
                         connection_metrics.metrics.tcp_errored_duration = time_taken as u64;
                         connection_metrics.status  = ConnectionStatus::ConnectionError;
-                        report_tcp_client_connection_metrics(connection_metrics);
+                        report_tcp_client_connection_metrics(connection_metrics,status_ch).await;
                         panic!("{}",format!("Error while connecting to server: {}",e))
                     }
                 },
@@ -102,20 +118,18 @@ impl Client{
                         Ok(_) => {},
                         Err(_) => {
                             connection_metrics.status =  ConnectionStatus::ConnectionClosed;
-                            report_tcp_client_connection_metrics(connection_metrics);
+                            report_tcp_client_connection_metrics(connection_metrics,status_ch.clone()).await;
                         }
                     },
                     _ = self.sh.recv() => {
                         connection_metrics.status = ConnectionStatus::ConnectionClosed;
-                        report_tcp_client_connection_metrics(connection_metrics);
+                        report_tcp_client_connection_metrics(connection_metrics,status_ch).await;
+                        println!("client shutdown");
                         info!("Shutting down the  client");
                         return Ok(())
                     }
                 };
             }
-
-            
-            println!("{:?}",connection_metrics);
             Ok(())
     }
 }

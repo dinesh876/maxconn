@@ -1,4 +1,5 @@
 use tokio::sync::mpsc;
+/*
 use maxconn::metrics::{TcpClientConnectionMetrics,ConnectionStatus};
 async fn start_background_reporting(max_connection:u64,report_interval: u64) -> Result<mpsc::Sender<TcpClientConnectionMetrics>,Box<dyn std::error::Error>>{
     let capacity:usize =  (max_connection * 3) as usize;
@@ -22,14 +23,28 @@ async fn collect_connections_status(mut status: mpsc::Receiver<TcpClientConnecti
 
 }
 
+*/
+
 #[tokio::main]
 async  fn main() -> Result<(),Box<dyn std::error::Error>> {
-    let max_connection:u64 = 100;
-    let report_interval:u64 = 100;
-    let statusch: mpsc::Sender<TcpClientConnectionMetrics> = start_background_reporting(max_connection, report_interval).await?;
-    
-    for i in 0..100 {
-        statusch.send(TcpClientConnectionMetrics::new(i,ConnectionStatus::ConnectionError)).await?;
+    let (tx,mut rx) = mpsc::channel::<u32>(100);
+    let tx_clone1  = tx.clone();
+    let tx_clone2 = tx.clone();
+    tokio::spawn(async move {
+        for i in 0..50{
+            tx_clone1.send(i).await;
+        }
+        drop(tx_clone1)
+    });
+    tokio::spawn(async move {
+        for i in 51..100 {
+            tx_clone2.send(i).await;
+        }
+       // drop(tx_clone2)
+    });
+    drop(tx);
+    while let Some(msg) = rx.recv().await {
+        println!("{:?}",msg);
     }
     Ok(())
 }
