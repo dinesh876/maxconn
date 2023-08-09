@@ -3,9 +3,10 @@ use std::sync::{Arc,Mutex};
 use std::thread;
 use std::time::Duration;
 use std::sync::atomic::AtomicBool;
-use crate::{TcpClientConnectionMetrics,GroupOfConnections,is_ok,with_error};
+use crate::{TcpClientConnectionMetrics,GroupOfConnections,is_ok};
 use std::sync::atomic::Ordering::Relaxed;
 use tracing::{info,error,debug};
+
 
 pub async fn start_background_reporting(max_connection:u64,report_interval: u64,stop_sig:Arc<AtomicBool>) -> Result<mpsc::Sender<TcpClientConnectionMetrics>,Box<dyn std::error::Error>>{
     let capacity:usize =  (max_connection * 3) as usize;
@@ -37,13 +38,10 @@ async fn collect_connections_status(connection_registry: Arc<Mutex<GroupOfConnec
                     if is_ok(&message) {
                         connection_registry_locked.max_concurrent_established +=1;
                     }
-                    if with_error(&message){
-                        connection_registry_locked.max_concurrent_established -= 1;
-                    }
                     connection_registry_locked.connections[message.id as usize] = message
                 },
                 None => {
-                    connection_registry_locked.connections.push(message)
+                     connection_registry_locked.connections.push(message)
                 }
             };
         }
@@ -63,13 +61,13 @@ async fn report_connection_status(connection_registry:Arc<Mutex<GroupOfConnectio
         }
         
          {
-            info!("{:?}\n",connection_registry.lock().unwrap().connections)
+            println!("{}",connection_registry.lock().unwrap())
          };
         
          thread::sleep(Duration::from_millis(interval_between_update));
 
      }
-     println!("Total Connection Established:{:?}",connection_registry.lock().unwrap().connections);
+     println!("Total Connection Established:{:?}",connection_registry.lock().unwrap().max_concurrent_established);
     Ok(())
 }
 

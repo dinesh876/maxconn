@@ -10,7 +10,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use crate::{TcpClientConnectionMetrics,ConnectionStatus};
-use tracing::{info,error,debug};
+use tracing::{info,debug};
 
 pub struct Client{
     remote_address:String,
@@ -55,7 +55,7 @@ pub async fn run(address: String,shutdown: impl Future + Send + 'static,max_conn
         
         tokio::spawn(async move {
             if let Err(e) = client.connect(id,status_ch_clone).await {
-                error!("Not able to connect to server with error {:?}",e)
+                debug!("Not able to connect to server with error {:?}",e)
             };
         });
         debug!("Established connection:{:?}",runner);
@@ -104,10 +104,10 @@ impl Client{
                         connection_metrics.metrics.tcp_errored_duration = time_taken as u64;
                         connection_metrics.status  = ConnectionStatus::ConnectionError;
                         report_tcp_client_connection_metrics(connection_metrics,status_ch).await;
-                        panic!("{}",format!("Error while connecting to server: {}",e))
+                        return Err(e.into())
                     }
                 },
-                Err(e) => panic!("{}",format!("timeout while connecting to server:{}",e))
+                Err(e) => return Err(format!("timeout while connecting to server:{}",e).into())
             };
 
 
