@@ -30,7 +30,7 @@ pub async fn run(listener: TcpListener,max_connection:usize,shutdown:impl Future
     info!(%max_connection,"Configuring the maximum number of connections allowed...");
     let mut server = Listener{
         listener,
-        limit_connections: Arc::new(Semaphore::new(5000)),
+        limit_connections: Arc::new(Semaphore::new(max_connection)),
         notify_shutdown,
         shutdown_complete_tx,
     };

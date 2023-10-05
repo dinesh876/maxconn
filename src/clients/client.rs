@@ -116,8 +116,9 @@ impl Client{
                 let _ = tokio::select!{
                     res = connection.read_stream() => match res{
                         Ok(_) => {},
-                        Err(_) => {
+                        Err(e) => {
                             connection_metrics.status =  ConnectionStatus::ConnectionClosed;
+                            println!("Connection read error :{:?}",e);
                             report_tcp_client_connection_metrics(connection_metrics,status_ch.clone()).await;
                         }
                     },
